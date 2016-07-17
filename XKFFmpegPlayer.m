@@ -65,12 +65,12 @@
         dispatch_sync(dispatch_get_main_queue(), ^{
             if (!error)
             {
-                welf.dispatchQueue = dispatch_queue_create("com.appeloper.channels", DISPATCH_QUEUE_SERIAL);
+                welf.dispatchQueue = dispatch_queue_create("com.ffmpegplayer.player", DISPATCH_QUEUE_SERIAL);
                 [welf.decoder setupVideoFrameFormat:KxVideoFrameFormatRGB];
                 [welf play];
             }
-            else if (self.delegate)
-                [self.delegate failed:error];
+            else if (welf.delegate)
+                [welf.delegate failed:error];
         });
     });
 }
@@ -93,9 +93,11 @@
     
     [self asyncDecodeFrames];
     
+    XKWelf welf = self;
+    
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC);
     dispatch_after(popTime, dispatch_get_main_queue(), ^{
-        [self tick];
+        [welf tick];
     });
     
     if (self.decoder.validAudio)
@@ -137,8 +139,10 @@
     
     if (!onOff && self.decoder.validAudio)
     {
+        XKWelf welf = self;
+    
         audioManager.outputBlock = ^(float *data, UInt32 numFrames, UInt32 numChannels) {
-            [self audioCallbackFillData:data
+            [welf audioCallbackFillData:data
                               numFrames:numFrames
                             numChannels:(int)numChannels];
         };
@@ -157,9 +161,11 @@
     BOOL paused = self.paused;
     [self pause];
     
+    XKWelf welf = self;
+    
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC);
     dispatch_after(popTime, dispatch_get_main_queue(), ^{
-        [self updatePosition:position * self.decoder.duration
+        [welf updatePosition:position * welf.decoder.duration
                       paused:paused];
     });
 }
@@ -289,9 +295,11 @@
         NSTimeInterval correction = [self tickCorrection];
         NSTimeInterval time = MAX(interval + correction, 0.01);
         
+        XKWelf welf = self;
+        
         dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, time * NSEC_PER_SEC);
         dispatch_after(popTime, dispatch_get_main_queue(), ^{
-            [self tick];
+            [welf tick];
         });
     }
     
@@ -475,9 +483,9 @@
                 {
                     welf.moviePosition = welf.decoder.position;
                     [welf presentFrame];
-                    if (self.delegate)
-                        [self.delegate tick:self.moviePosition - self.decoder.startTime
-                                   duration:self.decoder.duration];
+                    if (welf.delegate)
+                        [welf.delegate tick:welf.moviePosition - welf.decoder.startTime
+                                   duration:welf.decoder.duration];
                     [welf play];
                 }
             });
@@ -491,9 +499,9 @@
                 {
                     welf.moviePosition = welf.decoder.position;
                     [welf presentFrame];
-                    if (self.delegate)
-                        [self.delegate tick:self.moviePosition - self.decoder.startTime
-                                   duration:self.decoder.duration];
+                    if (welf.delegate)
+                        [welf.delegate tick:welf.moviePosition - welf.decoder.startTime
+                                   duration:welf.decoder.duration];
                 }
             });
         }        
