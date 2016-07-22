@@ -4,6 +4,8 @@
 
 @interface XKFFmpegPlayer : NSObject
 
++ (UIImage *)takeSnapshot:(NSURL *)url;
+
 @property (nonatomic) BOOL paused;
 
 - (void)load:(NSString *)path
