@@ -34,6 +34,271 @@
 
 @implementation XKFFmpegPlayer
 
++ (UIImage *)takeSnapshot:(NSURL *)url {
+    
+    av_register_all();
+    avformat_network_init();
+    
+    AVFormatContext *formatCtx = avformat_alloc_context();
+    
+    if (avformat_open_input(&formatCtx, [url.absoluteString cStringUsingEncoding:NSUTF8StringEncoding], NULL, NULL) < 0) {
+        
+        if (formatCtx) {
+            avformat_free_context(formatCtx);
+        }
+        
+        return nil;
+    }
+    
+    if (avformat_find_stream_info(formatCtx, NULL) < 0) {
+        
+        avformat_close_input(&formatCtx);
+        return nil;
+    }
+    
+    //
+    
+    AVFrame *videoFrame = NULL;
+    AVCodecContext *videoCodecCtx = NULL;
+    NSInteger videoStream = -1;
+    
+    for (int i = 0; i < formatCtx->nb_streams; i++) {
+        if (formatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+            if ((formatCtx->streams[i]->disposition & AV_DISPOSITION_ATTACHED_PIC) == 0) {
+                
+                // get a pointer to the codec context for the video stream
+                AVCodecContext *codecCtx = formatCtx->streams[i]->codec;
+                
+                // find the decoder for the video stream
+                AVCodec *codec = avcodec_find_decoder(codecCtx->codec_id);
+                if (!codec) {
+                    if (formatCtx) {
+                        avformat_close_input(&formatCtx);
+                        formatCtx = NULL;
+                    }
+                    
+                    return nil;
+                }
+                
+                // open codec
+                if (avcodec_open2(codecCtx, codec, NULL) < 0) {
+                    if (formatCtx) {
+                        avformat_close_input(&formatCtx);
+                        formatCtx = NULL;
+                    }
+                    
+                    return nil;
+                }
+                
+                videoFrame = av_frame_alloc();
+                
+                if (!videoFrame) {
+                    avcodec_close(codecCtx);
+                    
+                    if (formatCtx) {
+                        avformat_close_input(&formatCtx);
+                        formatCtx = NULL;
+                    }
+                    
+                    return nil;
+                }
+                
+                videoCodecCtx = codecCtx;
+                videoStream = i;
+                
+                break;
+            }
+        }
+    }
+    
+    //
+    
+    AVPacket packet;
+    
+    BOOL finished = NO;
+    
+    AVPicture picture;
+    struct SwsContext *swsContext = NULL;
+    
+    NSUInteger linesize = 0;
+    NSData *rgb;
+    
+    int width = 0;
+    int height = 0;
+    
+    while (!finished) {
+        
+        if (av_read_frame(formatCtx, &packet) < 0) {
+            break;
+        }
+        
+        if (packet.stream_index == videoStream) {
+            
+            int pktSize = packet.size;
+            
+            while (pktSize > 0) {
+                
+                int gotframe = 0;
+                int len = avcodec_decode_video2(videoCodecCtx,
+                                                videoFrame,
+                                                &gotframe,
+                                                &packet);
+                
+                if (len < 0) {
+                    break;
+                }
+                
+                if (gotframe) {
+                    
+                    //
+                    
+                    if (avpicture_alloc(&picture,
+                                        AV_PIX_FMT_RGB24,
+                                        videoCodecCtx->width,
+                                        videoCodecCtx->height) < 0) {
+                        
+                        if (videoFrame) {
+                            
+                            av_free(videoFrame);
+                            videoFrame = NULL;
+                        }
+                        
+                        if (videoCodecCtx) {
+                            
+                            avcodec_close(videoCodecCtx);
+                            videoCodecCtx = NULL;
+                        }
+                        
+                        if (formatCtx) {
+                            avformat_close_input(&formatCtx);
+                            formatCtx = NULL;
+                        }
+                        
+                        return nil;
+                    }
+                    
+                    swsContext = sws_getCachedContext(swsContext,
+                                                      videoCodecCtx->width,
+                                                      videoCodecCtx->height,
+                                                      videoCodecCtx->pix_fmt,
+                                                      videoCodecCtx->width,
+                                                      videoCodecCtx->height,
+                                                      AV_PIX_FMT_RGB24,
+                                                      SWS_FAST_BILINEAR,
+                                                      NULL, NULL, NULL);
+                    
+                    if (!swsContext) {
+                        
+                        avpicture_free(&picture);
+                        
+                        if (videoFrame) {
+                            
+                            av_free(videoFrame);
+                            videoFrame = NULL;
+                        }
+                        
+                        if (videoCodecCtx) {
+                            
+                            avcodec_close(videoCodecCtx);
+                            videoCodecCtx = NULL;
+                        }
+                        
+                        if (formatCtx) {
+                            avformat_close_input(&formatCtx);
+                            formatCtx = NULL;
+                        }
+                        
+                        return nil;
+                    }
+                    
+                    //
+                    
+                    sws_scale(swsContext,
+                              (const uint8_t **)videoFrame->data,
+                              videoFrame->linesize,
+                              0,
+                              videoCodecCtx->height,
+                              picture.data,
+                              picture.linesize);
+                    
+                    linesize = picture.linesize[0];
+                    rgb = [NSData dataWithBytes:picture.data[0]
+                                         length:linesize * videoCodecCtx->height];
+                    
+                    width = videoCodecCtx->width;
+                    height = videoCodecCtx->height;
+                    
+                    finished = YES;
+                }
+                
+                if (len == 0)
+                    break;
+                
+                pktSize -= len;
+            }
+        }
+        
+        av_free_packet(&packet);
+    }
+    
+    UIImage *image = nil;
+    
+    CGDataProviderRef provider = CGDataProviderCreateWithCFData((__bridge CFDataRef)(rgb));
+    if (provider) {
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+        if (colorSpace) {
+            CGImageRef imageRef = CGImageCreate(width,
+                                                height,
+                                                8,
+                                                24,
+                                                linesize,
+                                                colorSpace,
+                                                kCGBitmapByteOrderDefault,
+                                                provider,
+                                                NULL,
+                                                YES,
+                                                kCGRenderingIntentDefault);
+            
+            if (imageRef) {
+                image = [UIImage imageWithCGImage:imageRef];
+                CGImageRelease(imageRef);
+            }
+            CGColorSpaceRelease(colorSpace);
+        }
+        CGDataProviderRelease(provider);
+    }
+    
+    //
+    
+    videoStream = -1;
+    
+    if (swsContext) {
+        sws_freeContext(swsContext);
+        swsContext = NULL;
+    }
+    
+    avpicture_free(&picture);
+    
+    if (videoFrame) {
+        
+        av_free(videoFrame);
+        videoFrame = NULL;
+    }
+    
+    if (videoCodecCtx) {
+        
+        avcodec_close(videoCodecCtx);
+        videoCodecCtx = NULL;
+    }
+    
+    if (formatCtx) {
+        avformat_close_input(&formatCtx);
+        formatCtx = NULL;
+    }
+    
+    return image;
+}
+
 - (void)load:(NSString *)path
     delegate:(id<XKFFmpegPlayerDelegate>)delegate
 {
