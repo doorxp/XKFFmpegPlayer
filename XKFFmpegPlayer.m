@@ -3,6 +3,11 @@
 #import "KxMovieDecoder.h"
 #import "KxAudioManager.h"
 
+#include "libavformat/avformat.h"
+#include "libswscale/swscale.h"
+#include "libswresample/swresample.h"
+#include "libavutil/pixdesc.h"
+
 #define MIN_BUFFERED_DURATION       2.0
 #define MAX_BUFFERED_DURATION       4.0
 
