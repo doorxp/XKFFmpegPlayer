@@ -363,7 +363,7 @@
     
     [self asyncDecodeFrames];
     
-    XKWelf welf = self;
+    __weak typeof(self) welf = self;
     
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC);
     dispatch_after(popTime, dispatch_get_main_queue(), ^{
@@ -409,7 +409,7 @@
     
     if (!onOff && self.decoder.validAudio)
     {
-        XKWelf welf = self;
+        __weak typeof(self) welf = self;
     
         audioManager.outputBlock = ^(float *data, UInt32 numFrames, UInt32 numChannels) {
             [welf audioCallbackFillData:data
@@ -431,7 +431,7 @@
     BOOL paused = self.paused;
     [self pause];
     
-    XKWelf welf = self;
+    __weak typeof(self) welf = self;
     
     dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, 0.1 * NSEC_PER_SEC);
     dispatch_after(popTime, dispatch_get_main_queue(), ^{
@@ -565,7 +565,7 @@
         NSTimeInterval correction = [self tickCorrection];
         NSTimeInterval time = MAX(interval + correction, 0.01);
         
-        XKWelf welf = self;
+        __weak typeof(self) welf = self;
         
         dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, time * NSEC_PER_SEC);
         dispatch_after(popTime, dispatch_get_main_queue(), ^{
