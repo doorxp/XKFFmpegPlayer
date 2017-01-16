@@ -2,6 +2,8 @@
 Clean FFmpeg 3.0 player for iOS / tvOS.
 Based on [kxmovie](https://github.com/kolyvan/kxmovie)
 
+[Sample and FFLibs](http://www79.zippyshare.com/v/gMVFoT9x/file.html)
+
 ## Objects
 
 ### XKFFmpegPlayer
